@@ -1,28 +1,44 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const startGame = require("./gameEngine");
+// server.js
+import express from "express";
+import mongoose from "mongoose";
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
+app.use(express.json());
+
+mongoose.connect("mongodb://localhost:27017/aviator", {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
-io.on("connection", socket => {
-    console.log("Player connected");
+const userSchema = new mongoose.Schema({
+  username: String,
+  balance: Number,
+});
+const User = mongoose.model("User", userSchema);
 
-    socket.on("bet", amount => {
-        socket.bet = amount;
-    });
-
-    socket.on("cashout", multiplier => {
-        socket.emit("win", multiplier);
-    });
+// Get balance
+app.get("/user/:id", async (req, res) => {
+  const user = await User.findById(req.params.id);
+  res.json(user);
 });
 
-startGame(io);
+// Deposit
+app.post("/deposit", async (req, res) => {
+  const { userId, amount } = req.body;
+  const user = await User.findById(userId);
+  user.balance += amount;
+  await user.save();
+  res.json(user);
+});
 
-server.listen(3000, () =>
-    console.log("✅ Aviator backend running on port 3000")
-);
+// Withdraw
+app.post("/withdraw", async (req, res) => {
+  const { userId, amount } = req.body;
+  const user = await User.findById(userId);
+  if (user.balance >= amount) user.balance -= amount;
+  else return res.status(400).json({ error: "Insufficient balance" });
+  await user.save();
+  res.json(user);
+});
+
+app.listen(5000, () => console.log("Server running on port 5000"));
